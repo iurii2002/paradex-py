@@ -25,6 +25,9 @@ class OrderStatus(Enum):
     OPEN = "OPEN"
     CLOSED = "CLOSED"
 
+class OrderLiquidity(Enum):
+    TAKER = "TAKER"
+    MAKER = "MAKER"
 
 class OrderSide(Enum):
     Buy = "BUY"
