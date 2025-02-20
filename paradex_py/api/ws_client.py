@@ -121,10 +121,6 @@ class ParadexWebsocketClient(threading.Thread):
             params = {}
         channel_with_params = channel.value.format(**params)
 
-        if not self.ws.sock or not self.ws.sock.connected:
-            logging.warning("Websocket is not connected. Attempting to reconnect...")
-            self.reconnect()
-
         if not self.ws_ready:
             logging.debug("enqueueing subscription")
             self.queued_subscriptions.append((channel, params, ActiveSubscription(callback, subscription_id)))
