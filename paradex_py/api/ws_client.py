@@ -44,8 +44,16 @@ class ParadexWebsocketClient(threading.Thread):
     def send_ping(self):
         while True:
             time.sleep(50)
-            logging.debug("Websocket sending ping")
-            self.ws.send(json.dumps({"method": "ping"}))
+            if self.ws and self.ws.sock and self.ws.sock.connected:
+                logging.debug("Websocket sending ping")
+                try:
+                    self.ws.send(json.dumps({"method": "ping"}))
+                except websocket.WebSocketConnectionClosedException:
+                    logging.warning("Websocket connection closed. Attempting to reconnect...")
+                    self.reconnect()
+            else:
+                logging.warning("Websocket is not connected. Attempting to reconnect...")
+                self.reconnect()
 
     def on_open(self, _ws):
         logging.debug("on_open")
@@ -113,6 +121,10 @@ class ParadexWebsocketClient(threading.Thread):
             params = {}
         channel_with_params = channel.value.format(**params)
 
+        if not self.ws.sock or not self.ws.sock.connected:
+            logging.warning("Websocket is not connected. Attempting to reconnect...")
+            self.reconnect()
+
         if not self.ws_ready:
             logging.debug("enqueueing subscription")
             self.queued_subscriptions.append((channel, params, ActiveSubscription(callback, subscription_id)))
@@ -150,3 +162,15 @@ class ParadexWebsocketClient(threading.Thread):
                 }))
         self.active_subscriptions[channel_with_params] = new_active_subscriptions
         return len(active_subscriptions) != len(new_active_subscriptions)
+
+    def reconnect(self):
+        self.ws_ready = False  # Mark as not ready
+        time.sleep(5)  # Wait before retrying
+        self.ws = websocket.WebSocketApp(
+            self.api_url,
+            on_message=self.read_messages,
+            on_open=self.on_open,
+            header=self.bearer_header
+        )
+        self.ping_sender = threading.Thread(target=self.send_ping)
+        self.start()  # Restart the thread
