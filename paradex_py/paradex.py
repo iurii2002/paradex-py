@@ -1,12 +1,12 @@
 import logging
-from typing import Optional, Callable, Any
+from typing import Any, Callable, Optional
 
 from paradex_py.account.account import ParadexAccount
 from paradex_py.api.api_client import ParadexApiClient
+from paradex_py.api.models import ParadexWebsocketChannel
 from paradex_py.api.ws_client import ParadexWebsocketClient
 from paradex_py.environment import Environment
 from paradex_py.utils import raise_value_error
-from paradex_py.api.models import ParadexWebsocketChannel
 
 
 class Paradex:
@@ -26,14 +26,14 @@ class Paradex:
     """
 
     def __init__(
-            self,
-            env: Environment,
-            l1_address: Optional[str] = None,
-            l1_private_key: Optional[str] = None,
-            l2_private_key: Optional[str] = None,
-            logger: Optional[logging.Logger] = None,
-            skip_ws:bool = False):
-
+        self,
+        env: Environment,
+        l1_address: Optional[str] = None,
+        l1_private_key: Optional[str] = None,
+        l2_private_key: Optional[str] = None,
+        logger: Optional[logging.Logger] = None,
+        skip_ws: bool = False,
+    ):
         self.logger: logging.Logger = logger or logging.getLogger(__name__)
 
         # Load api client and system config
@@ -52,8 +52,15 @@ class Paradex:
         # Load websocket
         self.skip_ws = skip_ws
         if not self.skip_ws:
-            self.ws_client = ParadexWebsocketClient(env=env, logger=self.logger, account=self.account)
+            self.ws_client = ParadexWebsocketClient(
+                env=env, logger=self.logger, account=self.account, on_reconnect=self.handle_ws_reconnect
+            )
             self.ws_client.start()
+
+    def handle_ws_reconnect(self, new_ws_client):
+        """Updates the WebSocket client when it reconnects."""
+        self.logger.info("WebSocket reconnected, updating instance in Paradex.")
+        self.ws_client = new_ws_client  # Update reference
 
     def init_account(
         self,
@@ -79,16 +86,18 @@ class Paradex:
         )
         self.api_client.init_account(self.account)
 
-    def ws_subscribe(self, channel: ParadexWebsocketChannel, callback: Callable[[Any], None],
-                     params: Optional[dict] = None) -> int:
+    def ws_subscribe(
+        self, channel: ParadexWebsocketChannel, callback: Callable[[Any], None], params: Optional[dict] = None
+    ) -> int:
         if self.ws_client is None:
             raise RuntimeError("Cannot call subscribe since skip_ws was used")
         else:
             return self.ws_client.subscribe(channel=channel, callback=callback, params=params)
 
-    def ws_unsubscribe(self, channel: ParadexWebsocketChannel, subscription_id: int, params: Optional[dict] = None) -> bool:
+    def ws_unsubscribe(
+        self, channel: ParadexWebsocketChannel, subscription_id: int, params: Optional[dict] = None
+    ) -> bool:
         if self.ws_client is None:
             raise RuntimeError("Cannot call unsubscribe since skip_ws was used")
         else:
             return self.ws_client.unsubscribe(channel=channel, subscription_id=subscription_id, params=params)
-
